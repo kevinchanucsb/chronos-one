@@ -8,7 +8,7 @@ temperature and displays them occasionally. When the light is switched on/off, i
 and speaks the time. Pressing the button skips to the next mode immediately.
 
 To set the clock, you have to uncomment the RTC set line and compile and upload the code, then comment it again and repeat. This will 
-initialise the Real Time Clock to the compiler time, but subsequently allow the RTC to keep track with the backup battery
+initialise the Real Time Clock to the compiler time, but subsequently allow the RTC to keep track with the backup battery.
 
 The program works as follows:
 It runs through a setup routine to initialise all the variables and set up the interfaces
