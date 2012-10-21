@@ -85,6 +85,10 @@ to the first mode.
 #define LEDcols 9
 #define LEDFullBrightness 7
 #define LEDMediumBrightness 4
+
+#define EEPROMAddr_RecordLowTemperature 0
+#define EEPROMAddr_RecordHighTemperature 1
+
 /*
  I2C pins for RTC = A5 to RTC Pin 6 (SCL) and A4 to RTC Pin 5 (SDA)
  */
@@ -226,8 +230,8 @@ void loop(){
     int tmp=0;
     for (int ind=0;ind<Mode_Temperate_MovingAverageDepth;ind++) {tmp+=TemperatureDatapoints[ind];} // calculate the average of all datapoints for a moving average
     Temperature=(int)(0.5+tmp/(float)Mode_Temperate_MovingAverageDepth/9.3);//9.3 = 1024/1.1, analog pin is out of 1024 values, with a volt reference of 1.1v. sensor output is celsius in 10x mV. The 0.5 is to cause (int) to round, not floor.
-    if ((Temperature>TemperatureHigh)&&(TemperatureIndex==Mode_Temperate_MovingAverageDepth-1)) {TemperatureHigh=Temperature;ShowTemperature();} //only check records after at least a few averages have taken place to avoid spikes
-    if ((Temperature<TemperatureLow)&&(TemperatureIndex==Mode_Temperate_MovingAverageDepth-1)) {TemperatureLow=Temperature;ShowTemperature();}
+    if ((Temperature>TemperatureHigh)&&(TemperatureIndex==Mode_Temperate_MovingAverageDepth-1)) {TemperatureHigh=Temperature;EEPROM.write(EEPROMAddr_RecordHighTemperature, Temperature);ShowTemperature();} //only check records after at least a few averages have taken place to avoid spikes
+    if ((Temperature<TemperatureLow)&&(TemperatureIndex==Mode_Temperate_MovingAverageDepth-1)) {TemperatureLow=Temperature;EEPROM.write(EEPROMAddr_RecordLowTemperature, Temperature);ShowTemperature();}
   }
     
   if (IsNight()&&!Night) { // Light has just been turned off off
