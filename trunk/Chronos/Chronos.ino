@@ -184,6 +184,7 @@ char buffer[LEDrows];
 
 void setup(){
   LedSign::Init(GRAYSCALE);  // Initializes the LED screen
+
   pinMode(Pin_Button, INPUT); 
   pinMode(Pin_SpeakJetSerial,OUTPUT);
   SerialSpeakjet.begin(9600);
@@ -194,12 +195,13 @@ void setup(){
   RTC.begin();
 
   // Set the RTC time to match compiler time. Comment out after the clock has been set once and recompile.
-  //RTC.adjust(DateTime(__DATE__, __TIME__),16); // Set RTC date to match compile time and turn on 1HZ output for LED (bit 4 on the control register)
+  RTC.adjust(DateTime(__DATE__, __TIME__),16); // Set RTC date to match compile time and turn on 1HZ output for LED (bit 4 on the control register)
   if (RTC.isrunning()) { // check if Real Time Clock is running
     loadSentence(31);// Say "setup-ok"
     SerialSpeakjet.print(sentencebuffer);
+  } else {
+    RTC.adjust(DateTime(__DATE__, __TIME__),16); // Set RTC date to match compile time and turn on 1HZ output for LED (bit 4 on the control register)
   }
-
   Night = IsNight(); // initialise day/night flag
   modetimer=millis(); // reset timer;
 
