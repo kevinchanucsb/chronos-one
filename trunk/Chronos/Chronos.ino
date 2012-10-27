@@ -44,14 +44,14 @@ to the first mode.
 #define Mode_Smile 9
 #define Mode_Test 10
 
-#define Start_Mode Mode_Smile // Start with this mode
+#define Start_Mode Mode_CrossFade // Start with this mode
 
 #define Mode_Random_Delay 2500 // how long to run this mode before switching to the next in milliseconds
 #define Mode_Pong_Delay 15000
 #define Mode_Pong_Speed 70 // how fast the ball moves - delay in ms between frames
 #define Mode_Clock_Delay 5000
 #define Mode_Temperature_Delay 5000
-#define Mode_Temperate_MovingAverageDepth 10 // number of temperature readings to average, due to circuit noise.
+#define Mode_Temperate_MovingAverageDepth 50 // number of temperature readings to average, due to circuit noise.
 #define Mode_Smile_Delay 2000
 #define Mode_Bounce_Delay 10000
 #define Mode_Bounce_Speed 20// how fast the ball moves - delay in ms between frames
@@ -78,13 +78,15 @@ to the first mode.
 #define Pin_Temperature A3  
 #define Pin_LightLevel A2
 #define Pin_Button A1
-#define LightLevel_Dawn 800 // out of 1024. Used for hysteresis. Light is considered on when level rises above this level.
-#define LightLevel_Sunset 100 // out of 1024. Light is considered off when it drops below this level
+#define LightLevel_Dawn 500 // out of 1024. Used for hysteresis. Light is considered on when level rises above this level.
+#define LightLevel_Sunset 20 // out of 1024. Light is considered off when it drops below this level
 #define EEPROM_MAX 1024 // Maximum capacity of the EEPROM memory
 #define LEDrows 14
 #define LEDcols 9
 #define LEDFullBrightness 7
 #define LEDMediumBrightness 4
+#define Sound_On 1
+#define Sound_Off 0
 
 #define EEPROMAddr_RecordLowTemperature 0
 #define EEPROMAddr_RecordHighTemperature 1
@@ -103,6 +105,7 @@ byte TemperatureIndex=0; // Used to index next datapoint
 boolean Night=0;
 boolean ShowSecondIndicator=0;
 int Mode=Start_Mode;
+bool SoundOn=Sound_Off;
 unsigned long  modetimer=0; // in milliseconds, capable of timing up to 50 days or 7 weeks before rolling over.
 unsigned long  stopwatch=0; // in milliseconds
 unsigned long  temperaturetimer=0; // in milliseconds
@@ -197,8 +200,8 @@ void setup(){
   // Set the RTC time to match compiler time. Comment out after the clock has been set once and recompile.
   RTC.adjust(DateTime(__DATE__, __TIME__),16); // Set RTC date to match compile time and turn on 1HZ output for LED (bit 4 on the control register)
   if (RTC.isrunning()) { // check if Real Time Clock is running
-    loadSentence(31);// Say "setup-ok"
-    SerialSpeakjet.print(sentencebuffer);
+    //loadSentence(31);// Say "setup-ok"
+    //SerialSpeakjet.print(sentencebuffer);
   } else {
     RTC.adjust(DateTime(__DATE__, __TIME__),16); // Set RTC date to match compile time and turn on 1HZ output for LED (bit 4 on the control register)
   }
@@ -209,18 +212,28 @@ void setup(){
   //intialise all temperature variables to the current temp
   int tmp=analogRead(Pin_Temperature);
   for (int ind=0;ind<Mode_Temperate_MovingAverageDepth;ind++) {TemperatureDatapoints[ind]=tmp;} // initialise temperature averaging points
+  TemperatureHigh=EEPROM.read(EEPROMAddr_RecordHighTemperature); // Read record high from EEPROM
+  TemperatureLow=EEPROM.read(EEPROMAddr_RecordLowTemperature); // Read record high from EEPROM
   LedSign::Clear(); // blank out the LED display
+  //delay(2000);
+  loadSentence(1);// Say "Hello"
+  SerialSpeakjet.print(sentencebuffer);
+  now = RTC.now(); //get current time from the Real Time Clock module.
+  //delay(2000);
+  SayTime();
+  // Temperature=(int)(0.5+tmp/9.3);
+  // delay(2000);
+  // SayTemperature();
 }
 
 
 
 void loop(){
-  
     boolean ButtonPressed = digitalRead(Pin_Button);
     if (ButtonPressed) {
-      NextMode((Mode+1)%NumberofCyclingModes); // go to next mode
+      NextMode((Mode+1)%NumberofCyclingModes,Sound_On); // go to next mode
       LedSign::Clear();
-      delay(500);
+      delay(200);
     }
 
   if (millis()-temperaturetimer>100) { // take the temperature max every 100ms
@@ -232,8 +245,16 @@ void loop(){
     int tmp=0;
     for (int ind=0;ind<Mode_Temperate_MovingAverageDepth;ind++) {tmp+=TemperatureDatapoints[ind];} // calculate the average of all datapoints for a moving average
     Temperature=(int)(0.5+tmp/(float)Mode_Temperate_MovingAverageDepth/9.3);//9.3 = 1024/1.1, analog pin is out of 1024 values, with a volt reference of 1.1v. sensor output is celsius in 10x mV. The 0.5 is to cause (int) to round, not floor.
-    if ((Temperature>TemperatureHigh)&&(TemperatureIndex==Mode_Temperate_MovingAverageDepth-1)) {TemperatureHigh=Temperature;EEPROM.write(EEPROMAddr_RecordHighTemperature, Temperature);ShowTemperature();} //only check records after at least a few averages have taken place to avoid spikes
-    if ((Temperature<TemperatureLow)&&(TemperatureIndex==Mode_Temperate_MovingAverageDepth-1)) {TemperatureLow=Temperature;EEPROM.write(EEPROMAddr_RecordLowTemperature, Temperature);ShowTemperature();}
+    if ((Temperature>TemperatureHigh)&&(TemperatureIndex==Mode_Temperate_MovingAverageDepth-1)) {
+		TemperatureHigh=Temperature;
+		EEPROM.write(EEPROMAddr_RecordHighTemperature, Temperature);
+		SayTemperature();
+	} //only check records after at least a few averages have taken place to avoid spikes
+    if ((Temperature<TemperatureLow)&&(TemperatureIndex==Mode_Temperate_MovingAverageDepth-1)) {
+		TemperatureLow=Temperature;
+		EEPROM.write(EEPROMAddr_RecordLowTemperature, Temperature);
+		SayTemperature();
+	}
   }
     
   if (IsNight()&&!Night) { // Light has just been turned off off
@@ -271,7 +292,7 @@ void loop(){
       WormholeZoom=0;
     }
     if(millis()-modetimer>Mode_Wormhole_Delay) { // switch to next mode after a fixed delay
-      NextMode((Mode+1)%NumberofCyclingModes);
+      NextMode((Mode+1)%NumberofCyclingModes,Sound_Off);
       LedSign::Clear();
     }
     if (millis()-stopwatch>Mode_Wormhole_Speed) { // time for next frame of wormhole effect
@@ -304,7 +325,7 @@ void loop(){
     if (millis()-stopwatch>Mode_CrossFade_Speed) {
       stopwatch=millis(); //reset timer
       if (CrossFadeIndex++==14) { // 14 steps to the fade: 7 steps to brighten and 7 steps to fade out again. After 14, quit this mode.
-        NextMode((Mode+1)%NumberofCyclingModes);
+        NextMode((Mode+1)%NumberofCyclingModes,Sound_Off);
         LedSign::Clear();
       } else
        for (int row=0;row<LEDrows;row++) {
@@ -325,7 +346,7 @@ void loop(){
       helixangle=0.0;
     }
     if(millis()-modetimer>Mode_Helix_Delay) { // switch to next mode after a fixed delay
-      NextMode((Mode+1)%NumberofCyclingModes);
+      NextMode((Mode+1)%NumberofCyclingModes,Sound_Off);
       LedSign::Clear();
     }
     if (millis()-stopwatch>Mode_Helix_Speed) {
@@ -364,7 +385,7 @@ void loop(){
       bouncespeedY=0.0;
     }
     if(millis()-modetimer>Mode_Bounce_Delay) { // switch to next mode after a delay
-      NextMode((Mode+1)%NumberofCyclingModes);
+      NextMode((Mode+1)%NumberofCyclingModes,Sound_Off);
       LedSign::Clear();
     }
     if (millis()-stopwatch>Mode_Bounce_Speed) {
@@ -389,7 +410,7 @@ void loop(){
       LEDDrawArray(buffer,0,0); // and draw it
     }
     if(millis()-modetimer>Mode_Smile_Delay) {
-       NextMode(0); // start mode cycling
+       NextMode(0,Sound_Off); // start mode cycling
     }
   } // Mode_Smile
 
@@ -399,7 +420,7 @@ void loop(){
       NewMode=0; // next time skip setup for this mode, it's already done.
     }
     if(millis()-modetimer>Mode_Random_Delay) {
-      NextMode((Mode+1)%NumberofCyclingModes);
+      NextMode((Mode+1)%NumberofCyclingModes,Sound_Off);
     }
     for (int rows=0;rows<LEDrows;rows++) {
      for (int col=0;col<LEDcols;col++) {
@@ -414,9 +435,11 @@ void loop(){
       stopwatch=millis()+501; //reset timer, but let it trigger immediately
       NewMode=0; // next time skip setup for this mode, it's already done.
       TemperatureShowLow=0; // Show low first
+	  ShowTemperature();
+	  if (SoundOn) {SayTemperature();}
     }
     if(millis()-modetimer>Mode_Temperature_Delay) { // skip to next mode after delay
-      NextMode((Mode+1)%NumberofCyclingModes);
+      NextMode((Mode+1)%NumberofCyclingModes,Sound_Off);
       LedSign::Clear();
     }
     if (millis()-stopwatch>3000) { // screen update frequency
@@ -433,9 +456,10 @@ void loop(){
       stopwatch=millis(); //reset timer
       NewMode=0; // next time skip setup for this mode, it's already done.
       ShowTime();
+	  if (SoundOn) {SayTime();}
     }
     if(millis()-modetimer>Mode_Clock_Delay) {
-      NextMode((Mode+1)%NumberofCyclingModes);
+      NextMode((Mode+1)%NumberofCyclingModes,Sound_Off);
     }
     if (millis()-stopwatch>500) { // flash every second
       stopwatch=millis(); //reset timer
@@ -490,14 +514,14 @@ void loop(){
       if (pongpaddle2<8) {LedSign::Set(13,pongpaddle2+1,LEDFullBrightness);} else{LedSign::Set(13,pongpaddle2-1,LEDFullBrightness);} // print extra paddle pixel~
     }
     if(millis()-modetimer>Mode_Pong_Delay) { // skip to next mode after delay
-      NextMode((Mode+1)%NumberofCyclingModes);
+      NextMode((Mode+1)%NumberofCyclingModes,Sound_Off);
       LedSign::Clear();
     }
   } // Mode_Pong 
     
 };
 
-void NextMode(int nextmode) {Mode=nextmode;NewMode=1;}
+void NextMode(int nextmode, bool soundon) {Mode=nextmode;NewMode=1;SoundOn=soundon;} //soudon determines whether the next mode will have sound or not
 
 void LEDDrawArray(char bitmap[], byte offsetrow, byte offsetcol){ // Draw pixels based on loaded bitmap
   for (int rows=0;rows<LEDrows;rows++) {
@@ -529,7 +553,9 @@ void SayTemperature() {
     loadSentence(Temperature-20+7);  // then say the last digit
     SerialSpeakjet.print(sentencebuffer);
   }
-  delay(2000); // wait for the speech buffer to clear
+  loadSentence(7);// Say "degrees"
+  SerialSpeakjet.print(sentencebuffer);
+  //delay(2000); // wait for the speech buffer to clear
 }
 
 void SayTime() {
