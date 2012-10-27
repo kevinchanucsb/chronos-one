@@ -26,7 +26,7 @@ extern "C" void __cxa_pure_virtual() {}
 
 //already defined in arduno.h
 //already defined in arduno.h
-void NextMode(int nextmode);
+void NextMode(int nextmode, bool soundon);
 void LEDDrawArray(char bitmap[], byte offsetrow, byte offsetcol);
 boolean IsNight();
 void SayTemperature();
