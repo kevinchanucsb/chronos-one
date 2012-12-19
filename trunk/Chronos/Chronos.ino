@@ -79,7 +79,7 @@ to the first mode.
 #define Pin_LightLevel A2
 #define Pin_Button A1
 #define LightLevel_Dawn 500 // out of 1024. Used for hysteresis. Light is considered on when level rises above this level.
-#define LightLevel_Sunset 20 // out of 1024. Light is considered off when it drops below this level
+#define LightLevel_Sunset 5 // out of 1024. Light is considered off when it drops below this level
 #define EEPROM_MAX 1024 // Maximum capacity of the EEPROM memory
 #define LEDrows 14
 #define LEDcols 9
@@ -106,9 +106,11 @@ boolean Night=0;
 boolean ShowSecondIndicator=0;
 int Mode=Start_Mode;
 bool SoundOn=Sound_Off;
+bool ButtonState=0;
 unsigned long  modetimer=0; // in milliseconds, capable of timing up to 50 days or 7 weeks before rolling over.
 unsigned long  stopwatch=0; // in milliseconds
 unsigned long  temperaturetimer=0; // in milliseconds
+unsigned long  buttontimer=0; // in milliseconds
 boolean NewMode=1;
 byte pongballX=0;signed int pongdirX=1;
 byte pongballY=0;signed int pongdirY=1;
@@ -198,7 +200,7 @@ void setup(){
   RTC.begin();
 
   // Set the RTC time to match compiler time. Comment out after the clock has been set once and recompile.
-  RTC.adjust(DateTime(__DATE__, __TIME__),16); // Set RTC date to match compile time and turn on 1HZ output for LED (bit 4 on the control register)
+  //RTC.adjust(DateTime(__DATE__, __TIME__),16); // Set RTC date to match compile time and turn on 1HZ output for LED (bit 4 on the control register)
   if (RTC.isrunning()) { // check if Real Time Clock is running
     //loadSentence(31);// Say "setup-ok"
     //SerialSpeakjet.print(sentencebuffer);
@@ -229,8 +231,20 @@ void setup(){
 
 
 void loop(){
-    boolean ButtonPressed = digitalRead(Pin_Button);
-    if (ButtonPressed) {
+    bool ButtonPressed = digitalRead(Pin_Button);
+	if ((ButtonState==0)&&(ButtonPressed==1)) { // button pressed
+		ButtonState=1;
+		buttontimer=millis(); // reset timer, which stores the time since last press or release
+	}
+	if ((ButtonState==1)&&(ButtonPressed==0)) {
+		ButtonState=0;
+		buttontimer=millis(); // reset timer, which stores the time since last press or release
+	}
+	if ((ButtonState==1)&&(millis()-buttontimer>2000)) { // button held for longer than 2 seconds
+		loadSentence(29);// say "hello"
+		SerialSpeakjet.print(sentencebuffer);
+	}
+    if (ButtonState) {
       NextMode((Mode+1)%NumberofCyclingModes,Sound_On); // go to next mode
       LedSign::Clear();
       delay(200);
@@ -257,6 +271,7 @@ void loop(){
 	}
   }
     
+  /*
   if (IsNight()&&!Night) { // Light has just been turned off off
     Night=1;
     loadSentence(28);//say "goodnight"
@@ -267,6 +282,7 @@ void loop(){
     loadSentence(29);// say "hello"
     SerialSpeakjet.print(sentencebuffer);
   }
+  */
     
   now = RTC.now(); //get current time from the Real Time Clock module.
 
@@ -395,7 +411,15 @@ void loop(){
       bounceballY+=bouncespeedY;
       bouncespeedY+=Mode_Bounce_Gravity;
       if (bounceballX>LEDcols-1) {bounceballX=(LEDcols-1)-(bounceballX-(LEDcols-1));bouncespeedX*=-Mode_Bounce_Dispersion;}
-      if (bounceballY>LEDrows-1) {bounceballY=(LEDrows-1)-(bounceballY-(LEDrows-1));bouncespeedY*=-Mode_Bounce_Dispersion;if(bouncespeedY*(bouncespeedY)<0.2){bouncespeedY=-0.9;bouncespeedX=0.5;}}
+      if (bounceballY>LEDrows-1) {
+		  if (SoundOn) {
+		    loadSentence(2);// Say "Pistol"
+			SerialSpeakjet.print(sentencebuffer);
+		  }
+		  bounceballY=(LEDrows-1)-(bounceballY-(LEDrows-1));
+		  bouncespeedY*=-Mode_Bounce_Dispersion;
+		  if(bouncespeedY*(bouncespeedY)<0.2){bouncespeedY=-0.9;bouncespeedX=0.5;}
+	  }
       if (bounceballX<0) {bounceballX=-bounceballX;bouncespeedX*=-Mode_Bounce_Dispersion;}
       if (bounceballY<0) {bounceballY=-bounceballY;bouncespeedY*=-Mode_Bounce_Dispersion;}
       LedSign::Set((int)(bounceballY+0.5),(int)(bounceballX+0.5),LEDFullBrightness); //0.5s are to convert a floor() to a round()
